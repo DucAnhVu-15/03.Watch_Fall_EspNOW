@@ -1,0 +1,10 @@
+menu "Watch Fall - Sample buffer"
+
+    config WF_SBUF_CAPACITY
+        int "Dung lượng ring buffer (số mẫu)"
+        range 256 8192
+        default 1024
+        help
+            Mỗi mẫu 16 byte. 1024 mẫu @100Hz ~ 10 giây dữ liệu, 16KB RAM.
+
+endmenu

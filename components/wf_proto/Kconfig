@@ -1,0 +1,48 @@
+menu "Watch Fall - Common"
+
+    config WF_ESPNOW_CHANNEL
+        int "ESP-NOW Wi-Fi channel"
+        range 1 13
+        default 1
+        help
+            Master và Slave phải dùng cùng kênh.
+
+    config WF_SAMPLE_RATE_HZ
+        int "IMU sample rate (Hz)"
+        range 10 400
+        default 100
+
+    config WF_FRAME_SAMPLES
+        int "Số mẫu mới trong mỗi khung gửi"
+        range 10 229
+        default 100
+        help
+            100 mẫu @100Hz = 1 khung/giây. Tổng (mẫu mới + overlap) phải <= 239
+            để vừa 1 gói ESP-NOW v2.
+
+    config WF_OVERLAP_SAMPLES
+        int "Số mẫu cũ gửi dư (overlap)"
+        range 0 20
+        default 10
+
+    config WF_SYNC_INTERVAL_MS
+        int "Chu kỳ đồng bộ thời gian (ms)"
+        range 200 10000
+        default 1000
+
+    config WF_SYNC_TEST
+        bool "Bật test độ chính xác đồng bộ bằng dây GPIO"
+        default n
+        help
+            Nối 1 dây GPIO (và GND) giữa 2 board. Master đảo mức chân mỗi 500ms,
+            Slave bắt cạnh, quy thời điểm về đồng hồ Master rồi gửi lại.
+            Master log sai lệch (us) - chính là sai số đồng bộ thực tế.
+
+    config WF_SYNC_TEST_GPIO
+        int "GPIO dùng cho test đồng bộ"
+        depends on WF_SYNC_TEST
+        default 5
+        help
+            XIAO ESP32-S3: D4 = GPIO5. Không dùng GPIO2/3/4 (đã nối MMA8451).
+
+endmenu

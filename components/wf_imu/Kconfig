@@ -1,0 +1,78 @@
+menu "Watch Fall - IMU source"
+
+    choice WF_IMU_BACKEND
+        prompt "Nguồn dữ liệu IMU"
+        default WF_IMU_BACKEND_ULP if ULP_COPROC_TYPE_RISCV
+        default WF_IMU_BACKEND_SIM
+
+        config WF_IMU_BACKEND_ULP
+            bool "MMA8451 thật, ULP RISC-V đọc FIFO"
+            depends on ULP_COPROC_TYPE_RISCV
+
+        config WF_IMU_BACKEND_SIM
+            bool "Giả lập (sóng sin, không cần cảm biến)"
+    endchoice
+
+    config WF_IMU_I2C_ADDR
+        hex "Địa chỉ I2C của MMA8451"
+        depends on WF_IMU_BACKEND_ULP
+        default 0x1C
+        help
+            0x1C khi SA0 = GND, 0x1D khi SA0 = VCC.
+
+    config WF_IMU_SDA_GPIO
+        int "GPIO SDA (RTC I2C)"
+        depends on WF_IMU_BACKEND_ULP
+        default 3
+        help
+            ESP32-S3: RTC I2C chỉ có SDA trên GPIO1 hoặc GPIO3.
+
+    config WF_IMU_SCL_GPIO
+        int "GPIO SCL (RTC I2C)"
+        depends on WF_IMU_BACKEND_ULP
+        default 2
+        help
+            ESP32-S3: RTC I2C chỉ có SCL trên GPIO0 hoặc GPIO2.
+
+    config WF_IMU_INT1_GPIO
+        int "GPIO nối chân INT1 của MMA8451"
+        depends on WF_IMU_BACKEND_ULP
+        default 4
+        help
+            Phải là RTC GPIO (GPIO0-21 trên ESP32-S3).
+
+    config WF_IMU_FIFO_WATERMARK
+        int "FIFO watermark (số mẫu)"
+        depends on WF_IMU_BACKEND_ULP
+        range 1 32
+        default 25
+        help
+            Số mẫu trong FIFO thì kích INT1. 25 mẫu @100Hz = 1 batch mỗi 250 ms.
+            FIFO chỉ chứa 32 mẫu nên cần chừa chỗ cho thời gian ULP đọc.
+
+    config WF_IMU_ULP_POLL_US
+        int "Chu kỳ ULP kiểm tra INT1 (us)"
+        depends on WF_IMU_BACKEND_ULP
+        range 1000 50000
+        default 2000
+        help
+            Càng ngắn thì mốc thời gian của mỗi batch càng ít rung.
+
+    config WF_IMU_TEST_ONLY
+        bool "Chỉ đọc IMU và in log, không chạy ESP-NOW"
+        depends on WF_IMU_BACKEND_ULP
+        default y
+        help
+            app_main chỉ khởi động cảm biến và ULP rồi in từng mẫu 3 trục ra log.
+            Tắt tùy chọn này để chạy lại đầy đủ Master/Slave qua ESP-NOW.
+
+    config WF_SIM_ODR_ERR_PPM
+        int "Sai số ODR giả lập (ppm)"
+        range -50000 50000
+        default 0
+        help
+            Chỉ dùng cho nguồn giả lập.
+            Mô phỏng dao động nội của IMU chạy lệch (MMA8451 lệch vài %).
+            Ví dụ 5000 = chậm hơn 0.5%.
+
+endmenu
