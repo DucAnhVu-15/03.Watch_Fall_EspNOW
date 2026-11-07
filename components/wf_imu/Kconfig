@@ -61,10 +61,10 @@ menu "Watch Fall - IMU source"
     config WF_IMU_TEST_ONLY
         bool "Chỉ đọc IMU và in log, không chạy ESP-NOW"
         depends on WF_IMU_BACKEND_ULP
-        default y
+        default n
         help
             app_main chỉ khởi động cảm biến và ULP rồi in từng mẫu 3 trục ra log.
-            Tắt tùy chọn này để chạy lại đầy đủ Master/Slave qua ESP-NOW.
+            Dùng khi cần kiểm tra cảm biến mà không có C3.
 
     config WF_SIM_ODR_ERR_PPM
         int "Sai số ODR giả lập (ppm)"

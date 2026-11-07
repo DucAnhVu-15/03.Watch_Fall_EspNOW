@@ -5,44 +5,66 @@ menu "Watch Fall - Common"
         range 1 13
         default 1
         help
-            Master và Slave phải dùng cùng kênh.
+            Hai node và C3 phải dùng cùng kênh.
 
     config WF_SAMPLE_RATE_HZ
         int "IMU sample rate (Hz)"
         range 10 400
         default 100
 
-    config WF_FRAME_SAMPLES
-        int "Số mẫu mới trong mỗi khung gửi"
-        range 10 229
-        default 100
+    config WF_FRAME_MS
+        int "Độ dài mỗi khung (ms)"
+        range 200 2000
+        default 1000
         help
-            100 mẫu @100Hz = 1 khung/giây. Tổng (mẫu mới + overlap) phải <= 239
-            để vừa 1 gói ESP-NOW v2.
+            Khung chia theo đồng hồ chung nên số mẫu mỗi khung thay đổi theo ODR
+            thật của cảm biến. Tổng số mẫu phải vừa 1 gói ESP-NOW v2 (1470 byte).
 
     config WF_OVERLAP_SAMPLES
         int "Số mẫu cũ gửi dư (overlap)"
         range 0 20
         default 10
 
-    config WF_SYNC_INTERVAL_MS
-        int "Chu kỳ đồng bộ thời gian (ms)"
-        range 200 10000
-        default 1000
+    config WF_BEACON_MS
+        int "Chu kỳ beacon của C3 (ms)"
+        range 50 1000
+        default 100
+        help
+            Beacon dùng để đồng bộ thời gian, đồng thời mở khe gửi cho node.
+            Sửa thì phải nạp lại cả 3 thiết bị.
+
+    choice WF_PHY_RATE
+        prompt "Tốc độ PHY của gói dữ liệu"
+        default WF_PHY_RATE_6M
+        help
+            Khung khoảng 750 byte: 1 Mbps mất khoảng 6 ms, 6 Mbps khoảng 1 ms trên
+            sóng. Tốc độ cao hơn thì phát nhanh hơn nhưng chịu kém khi cơ thể chắn sóng.
+
+        config WF_PHY_RATE_1M
+            bool "1 Mbps"
+        config WF_PHY_RATE_6M
+            bool "6 Mbps"
+        config WF_PHY_RATE_12M
+            bool "12 Mbps"
+        config WF_PHY_RATE_24M
+            bool "24 Mbps"
+    endchoice
 
     config WF_SYNC_TEST
         bool "Bật test độ chính xác đồng bộ bằng dây GPIO"
         default n
         help
-            Nối 1 dây GPIO (và GND) giữa 2 board. Master đảo mức chân mỗi 500ms,
-            Slave bắt cạnh, quy thời điểm về đồng hồ Master rồi gửi lại.
-            Master log sai lệch (us) - chính là sai số đồng bộ thực tế.
+            Nối 1 dây GPIO và GND từ C3 tới cả 2 node. C3 đảo mức chân mỗi 500 ms,
+            mỗi node bắt cạnh, quy về đồng hồ chung rồi báo lại. C3 log chênh lệch
+            giữa 2 node, chính là sai số đồng bộ thực tế.
 
     config WF_SYNC_TEST_GPIO
         int "GPIO dùng cho test đồng bộ"
         depends on WF_SYNC_TEST
+        default 21 if IDF_TARGET_ESP32C3
         default 5
         help
-            XIAO ESP32-S3: D4 = GPIO5. Không dùng GPIO2/3/4 (đã nối MMA8451).
+            C3: pad 7 = D6 = GPIO21. S3: D4 = GPIO5.
+            Không dùng GPIO2/3/4 của S3 vì đã nối MMA8451.
 
 endmenu

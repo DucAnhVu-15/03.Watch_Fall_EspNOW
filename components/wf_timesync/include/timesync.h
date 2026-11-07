@@ -1,13 +1,13 @@
 /*
- * Đồng bộ thời gian kiểu NTP 2 chiều giữa Slave (client) và Master (server).
+ * Đồng bộ đồng hồ của node theo đồng hồ chung (esp_timer của C3).
  *
- *   Slave  t1 ---- SYNC_REQ ----> t2  Master
- *   Slave  t4 <--- SYNC_RESP ---- t3  Master
+ * Mỗi beacon cho 1 cặp (giờ node lúc nhận, giờ C3 lúc phát). Giữ các cặp gần nhất và
+ * fit đường thẳng common = a * local + b, nên bù được cả lệch lẫn trôi tinh thể.
  *
- *   offset = ((t2 - t1) + (t3 - t4)) / 2      (master_time = local_time + offset)
- *   rtt    = (t4 - t1) - (t3 - t2)
+ * Trễ từ lúc C3 lấy giờ đến lúc gói lên sóng là chung cho cả 2 node vì cùng nghe
+ * một gói broadcast, nên nó không tạo sai lệch giữa 2 node.
  *
- * Giữ cửa sổ N lần đo gần nhất, dùng lần đo có RTT nhỏ nhất (ít bị trễ hàng đợi nhất).
+ * Các hàm không có khóa: chỉ gọi từ một task.
  */
 #pragma once
 
@@ -15,10 +15,10 @@
 #include <stdint.h>
 
 void    timesync_reset(void);
-
-/* Thêm 1 lần đo. Trả về false nếu bị loại (RTT bất thường) */
-bool    timesync_add(int64_t t1, int64_t t2, int64_t t3, int64_t t4);
-
+void    timesync_add(int64_t local_us, int64_t common_us);
 bool    timesync_valid(void);
-int64_t timesync_to_master(int64_t local_us);
-void    timesync_get(int64_t *offset_us, int32_t *rtt_us);
+int64_t timesync_to_common(int64_t local_us);
+int64_t timesync_to_local(int64_t common_us);
+
+/* Tốc độ đồng hồ node so với C3, phần triệu */
+double  timesync_ppm(void);

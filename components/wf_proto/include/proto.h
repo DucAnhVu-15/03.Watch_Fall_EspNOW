@@ -1,7 +1,14 @@
 /*
- * Giao thức ESP-NOW giữa Master và Slave.
+ * Giao thức ESP-NOW giữa 2 node S3 và bộ thu C3.
  * Tất cả gói tin đều packed, little-endian.
- * Mốc thời gian (_us) là micro-giây theo esp_timer_get_time().
+ *
+ * C3 phát BEACON broadcast theo chu kỳ, một gói làm 4 việc: tìm C3, đồng bộ thời gian,
+ * điều khiển START/STOP và ACK khung dữ liệu. Node chỉ gửi trong khe giờ của mình
+ * ngay sau beacon nên 2 node không đụng nhau.
+ *
+ * Mốc thời gian _us theo micro-giây. "Đồng hồ chung" là esp_timer của C3.
+ * Khung thứ k gồm các mẫu mới trong [k, k+1) * CONFIG_WF_FRAME_MS của đồng hồ chung,
+ * nên frame_idx giống nhau ở 2 node luôn là cùng một khoảng thời gian.
  */
 #pragma once
 
@@ -12,21 +19,19 @@
 #include "sdkconfig.h"
 
 #define PROTO_MAGIC    0x5746u   /* "FW" */
-#define PROTO_VERSION  1
+#define PROTO_VERSION  2
+#define PROTO_NODES    2         /* node 1 = Master (tay phải), node 2 = Slave (tay trái) */
+#define PROTO_ACK_BITS 8         /* số khung đến sau next_frame mà bitmap theo dõi */
+#define PROTO_NO_FRAME 0xFFFFFFFFu
+
+#define PROTO_FRAME_US (CONFIG_WF_FRAME_MS * 1000LL)
 
 typedef enum {
-    PKT_SYNC_REQ   = 1,  /* S->M: yêu cầu đồng bộ thời gian (t1)          */
-    PKT_SYNC_RESP  = 2,  /* M->S: trả lời (t1, t2, t3) + trạng thái Master */
-    PKT_CMD        = 3,  /* M->S: START / STOP                             */
-    PKT_DATA       = 4,  /* S->M: khung dữ liệu IMU                        */
-    PKT_DATA_ACK   = 5,  /* M->S: xác nhận đã nhận khung                   */
-    PKT_SYNC_PROBE = 6,  /* S->M: test độ chính xác đồng bộ bằng GPIO      */
+    PKT_BEACON     = 1,  /* C3 -> tất cả: đồng hồ, START/STOP, ACK */
+    PKT_JOIN       = 2,  /* node -> C3: xin vào mạng               */
+    PKT_DATA       = 3,  /* node -> C3: khung dữ liệu IMU          */
+    PKT_SYNC_PROBE = 4,  /* node -> C3: test đồng bộ bằng dây GPIO */
 } pkt_type_t;
-
-typedef enum {
-    CMD_STOP  = 0,
-    CMD_START = 1,
-} cmd_t;
 
 typedef struct __attribute__((packed)) {
     uint16_t magic;
@@ -34,27 +39,28 @@ typedef struct __attribute__((packed)) {
     uint8_t  type;
 } pkt_hdr_t;
 
+/* Trạng thái nhận của 1 node trên C3 */
 typedef struct __attribute__((packed)) {
-    pkt_hdr_t hdr;
-    uint32_t  seq;
-    int64_t   t1_us;        /* Slave: thời điểm gửi (đồng hồ Slave)  */
-} pkt_sync_req_t;
+    uint16_t mac_tail;      /* 2 byte cuối MAC của node đã pair, 0 = chưa pair */
+    uint32_t next_frame;    /* khung kế tiếp C3 cần; mọi khung trước đó đã xong */
+    uint8_t  bitmap;        /* bit i = 1: đã nhận khung next_frame + 1 + i      */
+} pkt_ack_t;
 
 typedef struct __attribute__((packed)) {
     pkt_hdr_t hdr;
     uint32_t  seq;
-    int64_t   t1_us;        /* copy lại từ SYNC_REQ                  */
-    int64_t   t2_us;        /* Master: thời điểm nhận (đồng hồ Master) */
-    int64_t   t3_us;        /* Master: thời điểm gửi (đồng hồ Master)  */
-    uint8_t   running;      /* Master đang ghi hay không             */
-    uint16_t  session;      /* phiên ghi hiện tại                    */
-} pkt_sync_resp_t;
+    int64_t   t_c3_us;      /* đồng hồ chung lúc phát                        */
+    uint16_t  session;      /* số thứ tự bộ file, 0 = chưa ghi lần nào       */
+    uint8_t   running;      /* 1: phiên đang mở                              */
+    uint32_t  start_frame;  /* khung đầu tiên của phiên                      */
+    uint32_t  stop_frame;   /* khung cuối của phiên, PROTO_NO_FRAME: chưa STOP */
+    pkt_ack_t ack[PROTO_NODES];
+} pkt_beacon_t;
 
 typedef struct __attribute__((packed)) {
     pkt_hdr_t hdr;
-    uint8_t   cmd;          /* cmd_t */
-    uint16_t  session;
-} pkt_cmd_t;
+    uint8_t   node_id;
+} pkt_join_t;
 
 typedef struct __attribute__((packed)) {
     int16_t x, y, z;        /* raw 14-bit căn trái (MMA8451: 1g ~ 4096 @ ±8g) */
@@ -62,14 +68,18 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
     pkt_hdr_t    hdr;
+    uint8_t      node_id;
+    uint8_t      retry;        /* lần gửi lại (0 = lần đầu)                    */
     uint16_t     session;
     uint32_t     frame_idx;
-    int64_t      t_first_us;   /* thời điểm mẫu s[0], đã quy về đồng hồ Master     */
-    int64_t      t_last_us;    /* thời điểm mẫu s[n_total-1], đồng hồ Master       */
-    uint16_t     n_total;      /* = n_overlap + số mẫu mới                         */
-    uint8_t      n_overlap;    /* số mẫu cũ ở đầu khung                            */
-    uint8_t      retry;        /* lần gửi lại (0 = lần đầu)                        */
-    uint32_t     sync_rtt_us;  /* RTT của mẫu đồng bộ đang dùng (chẩn đoán)        */
+    uint32_t     last_seq;     /* số thứ tự của mẫu s[n_total-1] trong node    */
+    int64_t      t_first_us;   /* thời điểm mẫu s[0], đồng hồ chung            */
+    int64_t      t_last_us;    /* thời điểm mẫu s[n_total-1], đồng hồ chung    */
+    int64_t      t_first_local_us; /* thời điểm mẫu s[0], đồng hồ của node     */
+    uint16_t     fifo_ovf;     /* số lần FIFO cảm biến tràn, cộng dồn          */
+    uint16_t     ring_drop;    /* số mẫu ULP phải bỏ, cộng dồn                 */
+    uint16_t     n_total;      /* = n_overlap + số mẫu mới                     */
+    uint8_t      n_overlap;    /* số mẫu cũ ở đầu khung                        */
     pkt_sample_t s[];
 } pkt_data_t;
 
@@ -77,16 +87,13 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
     pkt_hdr_t hdr;
-    uint16_t  session;
-    uint32_t  frame_idx;
-} pkt_data_ack_t;
-
-typedef struct __attribute__((packed)) {
-    pkt_hdr_t hdr;
-    int64_t   t_edge_master_us;  /* thời điểm cạnh GPIO Slave bắt được, quy về đồng hồ Master */
+    uint8_t   node_id;
+    int64_t   t_edge_us;    /* cạnh GPIO, đã quy về đồng hồ chung */
 } pkt_sync_probe_t;
 
-_Static_assert(CONFIG_WF_FRAME_SAMPLES + CONFIG_WF_OVERLAP_SAMPLES <= PKT_DATA_MAX_SAMPLES,
+/* Chừa 10% vì ODR thật của cảm biến có thể lệch so với danh định */
+_Static_assert(CONFIG_WF_SAMPLE_RATE_HZ * CONFIG_WF_FRAME_MS / 1000 * 11 / 10 + CONFIG_WF_OVERLAP_SAMPLES
+               <= PKT_DATA_MAX_SAMPLES,
                "Khung dữ liệu vượt quá 1 gói ESP-NOW v2 (1470 byte)");
 
 static inline void proto_hdr_init(pkt_hdr_t *h, pkt_type_t type)
@@ -108,4 +115,9 @@ static inline uint8_t proto_check(const void *buf, int len)
         return 0;
     }
     return h.type;
+}
+
+static inline uint16_t proto_mac_tail(const uint8_t mac[6])
+{
+    return (uint16_t)((mac[4] << 8) | mac[5]);
 }

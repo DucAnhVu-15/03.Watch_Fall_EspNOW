@@ -205,3 +205,9 @@ bool imu_src_running(void)
 {
     return s_running;
 }
+
+void imu_src_get_drops(uint32_t *fifo_ovf, uint32_t *ring_drop)
+{
+    *fifo_ovf = ulp_stat_fifo_overflows;
+    *ring_drop = ulp_stat_ring_drops;
+}

@@ -98,6 +98,26 @@ esp_err_t link_init(uint8_t channel)
     return ESP_OK;
 }
 
+static esp_err_t set_peer_rate(const uint8_t mac[6])
+{
+    esp_now_rate_config_t cfg = {
+#if CONFIG_WF_PHY_RATE_1M
+        .phymode = WIFI_PHY_MODE_11B,
+        .rate = WIFI_PHY_RATE_1M_L,
+#elif CONFIG_WF_PHY_RATE_12M
+        .phymode = WIFI_PHY_MODE_11G,
+        .rate = WIFI_PHY_RATE_12M,
+#elif CONFIG_WF_PHY_RATE_24M
+        .phymode = WIFI_PHY_MODE_11G,
+        .rate = WIFI_PHY_RATE_24M,
+#else
+        .phymode = WIFI_PHY_MODE_11G,
+        .rate = WIFI_PHY_RATE_6M,
+#endif
+    };
+    return esp_now_set_peer_rate_config(mac, &cfg);
+}
+
 esp_err_t link_add_peer(const uint8_t mac[6])
 {
     if (esp_now_is_peer_exist(mac)) {
@@ -110,10 +130,18 @@ esp_err_t link_add_peer(const uint8_t mac[6])
     };
     memcpy(peer.peer_addr, mac, 6);
     esp_err_t err = esp_now_add_peer(&peer);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "peer added " MACSTR, MAC2STR(mac));
+    if (err != ESP_OK) {
+        return err;
     }
-    return err;
+    /* Beacon broadcast giữ tốc độ mặc định: chậm hơn nhưng xa hơn */
+    if (memcmp(mac, LINK_BCAST, 6) != 0) {
+        err = set_peer_rate(mac);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "set peer rate failed: %s", esp_err_to_name(err));
+        }
+    }
+    ESP_LOGI(TAG, "peer added " MACSTR, MAC2STR(mac));
+    return ESP_OK;
 }
 
 esp_err_t link_send(const uint8_t mac[6], const void *data, size_t len)

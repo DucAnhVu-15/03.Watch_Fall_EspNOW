@@ -22,3 +22,6 @@ esp_err_t imu_src_init(const imu_src_cfg_t *cfg);
 esp_err_t imu_src_start(void);
 esp_err_t imu_src_stop(void);
 bool      imu_src_running(void);
+
+/* Số lần FIFO cảm biến tràn và số mẫu ULP phải bỏ, cộng dồn từ lúc khởi động */
+void      imu_src_get_drops(uint32_t *fifo_ovf, uint32_t *ring_drop);

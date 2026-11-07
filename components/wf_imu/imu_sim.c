@@ -84,3 +84,9 @@ bool imu_src_running(void)
 {
     return s_running;
 }
+
+void imu_src_get_drops(uint32_t *fifo_ovf, uint32_t *ring_drop)
+{
+    *fifo_ovf = 0;
+    *ring_drop = 0;
+}

@@ -1,0 +1,11 @@
+menu "Watch Fall - Node"
+
+    config WF_NODE_ID
+        int "Node ID (1 = Master, tay phải; 2 = Slave, tay trái)"
+        range 1 2
+        default 1
+        help
+            Quyết định tên file trên thẻ SD và khe gửi sau beacon. 2 node phải khác
+            ID nhau; giá trị được đặt sẵn trong sdkconfig.defaults của từng project.
+
+endmenu

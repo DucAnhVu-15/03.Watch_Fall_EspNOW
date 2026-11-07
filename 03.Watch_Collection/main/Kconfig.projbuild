@@ -1,0 +1,69 @@
+menu "Watch Fall - Collection (SD)"
+
+    config WF_BTN_START_GPIO
+        int "GPIO nút START"
+        default 3
+        help
+            XIAO ESP32-C3: D1 = GPIO3. Nút nối xuống GND, dùng pull-up nội.
+
+    config WF_BTN_STOP_GPIO
+        int "GPIO nút STOP"
+        default 5
+        help
+            XIAO ESP32-C3: D3 = GPIO5. Nút nối xuống GND, dùng pull-up nội.
+
+    config WF_SD_MOSI_GPIO
+        int "GPIO MOSI"
+        default 10
+        help
+            XIAO ESP32-C3: D10 = GPIO10.
+
+    config WF_SD_MISO_GPIO
+        int "GPIO MISO"
+        default 9
+        help
+            XIAO ESP32-C3: D9 = GPIO9 (chân strapping, cũng là nút BOOT).
+
+    config WF_SD_SCK_GPIO
+        int "GPIO SCK"
+        default 8
+        help
+            XIAO ESP32-C3: D8 = GPIO8 (chân strapping).
+
+    config WF_SD_CS_GPIO
+        int "GPIO CS"
+        default 20
+        help
+            XIAO ESP32-C3: D7 = GPIO20.
+
+    config WF_SD_FREQ_KHZ
+        int "Tốc độ SPI của thẻ SD (kHz)"
+        range 400 20000
+        default 4000
+        help
+            4 MHz đã đủ dư cho khoảng 8 kB/s và ít kén dây nối.
+
+    config WF_STORE_QUEUE_LEN
+        int "Số khung chờ ghi trong RAM"
+        range 4 64
+        default 16
+        help
+            16 khung bằng khoảng 8 giây dữ liệu của 2 node.
+
+    config WF_STORE_SYNC_MS
+        int "Chu kỳ fsync (ms)"
+        range 500 10000
+        default 2000
+        help
+            Nếu mất nguồn trước khi bấm STOP, phần chưa fsync sẽ mất. Chu kỳ ngắn
+            hơn thì an toàn hơn nhưng ghi thẻ nhiều hơn.
+
+    config WF_STORE_SELFTEST
+        bool "Tự kiểm tra ghi SD bằng dữ liệu giả của 2 node"
+        default n
+        help
+            Chỉ để thử thẻ SD, không cần 2 đồng hồ: từ lúc bấm START đến lúc bấm
+            STOP, sinh khung giả của 2 node và bỏ qua dữ liệu thật qua ESP-NOW.
+            Khi đóng file sẽ đọc lại để đối chiếu số dòng.
+
+endmenu
